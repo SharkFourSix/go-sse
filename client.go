@@ -76,7 +76,24 @@ func (c *Client) NewConnection(r *http.Request) *Connection {
 	return conn
 }
 
+// See https://github.com/tmaxmax/go-sse/issues/20
 func (c *Client) newBackoff(ctx context.Context) (b backoff.BackOff, setRetry func(time.Duration)) {
+	base := backoff.NewConstantBackOff(c.DefaultReconnectionTime)
+	b = backoff.WithContext(base, ctx)
+	if c.MaxRetries >= 0 {
+		rb := backoff.WithMaxRetries(b, uint64(c.MaxRetries))
+		return rb, func(d time.Duration) {
+			base.Interval = d
+			rb.Reset()
+		}
+	}
+	return b, func(d time.Duration) {
+		base.Interval = d
+		b.Reset()
+	}
+}
+
+/* func (c *Client) newBackoff(ctx context.Context) (b backoff.BackOff, setRetry func(time.Duration)) {
 	base := backoff.NewExponentialBackOff()
 	base.InitialInterval = c.DefaultReconnectionTime
 	b = backoff.WithContext(base, ctx)
@@ -91,7 +108,7 @@ func (c *Client) newBackoff(ctx context.Context) (b backoff.BackOff, setRetry fu
 		base.InitialInterval = d
 		b.Reset()
 	}
-}
+} */
 
 func contentType(header string) string {
 	cts := strings.FieldsFunc(header, func(r rune) bool {
